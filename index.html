@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ConfirmBase: see only the houses worth inspecting</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0F2342; --navy2:#1B3A66; --green:#0E9F6E; --green-soft:#DDF5EA;
+  --red-soft:#FDE8E6; --red:#C2392F; --bg:#F6F8FB; --paper:#fff; --ink:#14213A; --muted:#55627A; --line:#DDE3EC;
+  --head:'Bricolage Grotesque','Segoe UI',sans-serif; --body:'DM Sans','Segoe UI',sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.55;font-size:16px;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+h1,h2,h3{font-family:var(--head);margin:0;color:var(--navy);line-height:1.1;letter-spacing:-.02em}
+p{margin:0}
+.wrap{max-width:760px;margin:0 auto;padding:0 22px}
+:focus-visible{outline:3px solid var(--green);outline-offset:2px}
+
+.hero{background:var(--navy);color:#fff;padding:34px 0 56px}
+.brand{font-family:var(--head);font-weight:800;font-size:20px;letter-spacing:-.01em;margin-bottom:44px}
+.brand span{color:#5FE0AE}
+.hero h1{color:#fff;font-size:clamp(34px,8vw,54px);font-weight:800;max-width:15ch}
+.hero .sub{margin-top:18px;color:#C7D3E6;font-size:18px;max-width:46ch}
+.cta-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+.btn{display:inline-block;font:700 16px var(--body);padding:14px 22px;border-radius:10px;border:0;cursor:pointer;text-decoration:none;text-align:center}
+.btn-green{background:#2BD18F;color:#06261A}
+.btn-green:hover{background:#4DE0A5}
+.btn-line{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.45)}
+.btn-line:hover{background:rgba(255,255,255,.08)}
+
+.match{margin-top:40px;background:var(--paper);color:var(--ink);border-radius:16px;padding:18px 20px;max-width:430px;
+  box-shadow:0 18px 40px rgba(0,0,0,.28);transform:rotate(-1.2deg)}
+.match .top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+.match .ttl{font-family:var(--head);font-weight:700;font-size:18px;color:var(--navy)}
+.badge{background:var(--green-soft);color:#066A47;font-weight:700;font-size:13px;padding:4px 10px;border-radius:99px;white-space:nowrap}
+.match ul{list-style:none;margin:0;padding:0;font-size:15px}
+.match li{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
+.match li:first-child{border-top:0}
+.tick{flex:none;width:20px;height:20px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;margin-top:2px}
+.match .note{margin-top:10px;font-size:13px;color:var(--muted)}
+
+section{padding:52px 0}
+h2{font-size:clamp(26px,5vw,34px);font-weight:700}
+.lead{color:var(--muted);margin-top:10px;max-width:56ch}
+.two{display:grid;gap:16px;margin-top:26px}
+@media(min-width:640px){.two{grid-template-columns:1fr 1fr}}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:22px}
+.panel h3{font-size:20px;margin-bottom:12px}
+.panel .who{font-size:14px;color:var(--muted);margin-bottom:6px;font-weight:500}
+.panel ul{margin:0;padding:0;list-style:none}
+.panel li{padding:9px 0 9px 28px;position:relative;border-top:1px solid var(--line);font-size:15.5px}
+.panel li:first-child{border-top:0}
+.panel li::before{content:"✓";position:absolute;left:0;top:9px;width:20px;height:20px;border-radius:50%;background:var(--green-soft);color:#066A47;font-size:12px;font-weight:700;display:grid;place-items:center}
+.panel.pain li::before{content:"✕";background:var(--red-soft);color:var(--red)}
+
+.steps{list-style:none;margin:26px 0 0;padding:0;display:grid;gap:14px;counter-reset:s}
+.steps li{counter-increment:s;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px 20px 18px 66px;position:relative}
+.steps li::before{content:counter(s);position:absolute;left:18px;top:16px;width:34px;height:34px;border-radius:50%;background:var(--navy);color:#fff;font:700 16px var(--head);display:grid;place-items:center}
+.steps b{display:block;font-family:var(--head);font-size:18px;color:var(--navy);margin-bottom:2px}
+.steps span{color:var(--muted);font-size:15.5px}
+
+.signup{background:var(--navy);color:#fff}
+.signup h2{color:#fff}
+.signup .lead{color:#C7D3E6}
+.tabs{display:flex;gap:6px;margin:24px 0 14px;background:rgba(255,255,255,.1);padding:5px;border-radius:12px}
+.tab{flex:1;padding:12px 8px;border:0;border-radius:8px;background:transparent;color:#C7D3E6;font:700 15px var(--body);cursor:pointer}
+.tab[aria-selected="true"]{background:#fff;color:var(--navy)}
+.card{background:var(--paper);color:var(--ink);border-radius:16px;padding:24px}
+.card[hidden]{display:none}
+.card h3{font-size:22px;margin-bottom:4px}
+.card .desc{color:var(--muted);font-size:15px;margin-bottom:18px}
+.field{margin-bottom:14px}
+.field>label,legend{display:block;font-weight:700;font-size:14px;color:var(--navy);margin-bottom:6px;padding:0}
+fieldset{border:0;padding:0;margin:0 0 14px}
+input[type=text],input[type=tel],input[type=email],select,textarea{width:100%;padding:12px 13px;border:1.5px solid var(--line);border-radius:10px;font:16px var(--body);color:var(--ink);background:#FBFCFE}
+textarea{min-height:76px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px var(--green-soft)}
+.opt{font-weight:500;color:var(--muted)}
+.checks{display:grid;gap:8px}
+@media(min-width:520px){.checks{grid-template-columns:1fr 1fr}}
+.chk{display:flex;gap:9px;align-items:center;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:14.5px;cursor:pointer;background:#FBFCFE}
+.chk input{accent-color:var(--red);width:17px;height:17px;margin:0}
+.chk:has(input:checked){border-color:var(--red);background:var(--red-soft)}
+.card .btn{width:100%;background:var(--navy);color:#fff;margin-top:6px}
+.card .btn:hover{background:var(--navy2)}
+.card .btn:disabled{opacity:.6;cursor:wait}
+.hint{font-size:13px;color:var(--muted);text-align:center;margin-top:10px}
+.done{display:none;text-align:center;padding:14px 4px}
+.done.show{display:block}
+.done .big{font-family:var(--head);font-size:24px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.err{display:none;color:var(--red);font-size:14px;margin-top:10px;text-align:center}
+.err.show{display:block}
+.hp{position:absolute;left:-9999px;height:0;overflow:hidden}
+.ref{margin-top:18px;background:rgba(255,255,255,.1);border-radius:12px;padding:16px 18px;font-size:15px;color:#DCE5F3}
+.ref b{color:#fff}
+footer{padding:26px 0 40px;text-align:center;font-size:13.5px;color:var(--muted)}
+footer b{color:var(--navy)}
+@media(prefers-reduced-motion:no-preference){
+  .match{animation:land .7s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes land{from{opacity:0;transform:translateY(18px) rotate(-3deg)}to{opacity:1;transform:translateY(0) rotate(-1.2deg)}}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">Confirm<span>Base</span></div>
+    <h1>Only see the houses worth inspecting.</h1>
+    <p class="sub">We match you with homes that fit your taste and have none of your red flags, so you stop wasting days on inspections that go nowhere.</p>
+    <div class="cta-row">
+      <a class="btn btn-green" href="#join" data-pick="tenant">I'm looking for a house</a>
+      <a class="btn btn-line" href="#join" data-pick="agent">I'm an agent / landlord</a>
+    </div>
+    <div class="match" aria-hidden="true">
+      <div class="top"><div class="ttl">2-bed flat, Kubwa</div><div class="badge">Matches your taste</div></div>
+      <ul>
+        <li><span class="tick">✓</span>Within your ₦700k budget</li>
+        <li><span class="tick">✓</span>Tarred road, no flooding</li>
+        <li><span class="tick">✓</span>Steady water, prepaid meter</li>
+        <li><span class="tick">✓</span>Red flags found: none</li>
+      </ul>
+      <div class="note">Sample card. This is the kind of shortlist you'll get.</div>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>House hunting shouldn't cost this much energy.</h2>
+    <p class="lead">Today, tenants and agents both burn time and money on viewings that were never going to work.</p>
+    <div class="two">
+      <div class="panel pain">
+        <div class="who">If you're a tenant</div>
+        <h3>You've probably been here</h3>
+        <ul>
+          <li>Travelled across town for a house that looks nothing like the photos</li>
+          <li>Inspected places with your deal-breakers: noise, flooding, no water</li>
+          <li>Spent money and energy on viewings, again and again</li>
+        </ul>
+      </div>
+      <div class="panel pain">
+        <div class="who">If you're an agent</div>
+        <h3>And so have you</h3>
+        <ul>
+          <li>Showing houses to people who were never going to rent</li>
+          <li>No-shows and time wasters eating your day</li>
+          <li>Splitting your commission with other agents in the chain</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <h2>What ConfirmBase does about it</h2>
+    <p class="lead">We connect the right tenant to the right house, and only serious people reach the door.</p>
+    <div class="two">
+      <div class="panel">
+        <div class="who">For tenants</div>
+        <h3>Fewer inspections, better houses</h3>
+        <ul>
+          <li>Houses picked to match your taste</li>
+          <li>Your red flags filtered out before you ever see a listing</li>
+          <li>Inspect only the few places that truly fit</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <div class="who">For agents</div>
+        <h3>Serious tenants, full commission</h3>
+        <ul>
+          <li>Tenants whose taste your house already matches</li>
+          <li>Every tenant has paid an inspection fee, released to you after the inspection</li>
+          <li>Deal directly and keep your full commission</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><b>Tell us your taste and red flags</b><span>Budget, area, what you love and what you refuse to live with.</span></li>
+      <li><b>We match you with houses that fit</b><span>A short, personalised list instead of endless scrolling.</span></li>
+      <li><b>Commit to an inspection</b><span>Pay a small inspection fee. It's released to the agent only after the inspection happens.</span></li>
+      <li><b>Inspect, decide, move in</b><span>Meet the agent directly and close the deal without middlemen.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="signup" id="join">
+  <div class="wrap">
+    <h2>Join the early list</h2>
+    <p class="lead">Early members get first access when we open and help decide which areas we cover first.</p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-tenant" aria-selected="true" aria-controls="card-tenant">I'm a tenant</button>
+      <button class="tab" role="tab" id="tab-agent" aria-selected="false" aria-controls="card-agent">I'm an agent</button>
+    </div>
+
+    <div class="card" id="card-tenant" role="tabpanel" aria-labelledby="tab-tenant">
+      <form data-type="tenant" novalidate>
+        <h3>Find your next home</h3>
+        <p class="desc">Takes about a minute. The more you tell us, the better your matches.</p>
+        <div class="field"><label for="t-name">Your name</label><input id="t-name" name="name" type="text" autocomplete="name" required></div>
+        <div class="field"><label for="t-phone">WhatsApp number</label><input id="t-phone" name="phone" type="tel" inputmode="tel" placeholder="080XXXXXXXX" autocomplete="tel" required></div>
+        <div class="field"><label for="t-email">Email <span class="opt">(optional)</span></label><input id="t-email" name="email" type="email" autocomplete="email"></div>
+        <div class="field"><label for="t-area">Which area(s) do you want to live in?</label><input id="t-area" name="areas" type="text" placeholder="e.g. Arab road, Chikakore, FO1" required></div>
+        <div class="field"><label for="t-budget">Yearly rent budget</label>
+          <select id="t-budget" name="budget" required>
+            <option value="" disabled selected>Select a range</option>
+            <option>Under ₦500,000</option><option>₦500,000 – ₦1,000,000</option><option>₦1,000,000 – ₦2,000,000</option><option>₦2,000,000 – ₦4,000,000</option><option>Above ₦4,000,000</option>
+          </select></div>
+        <div class="field"><label for="t-when">When do you need to move?</label>
+          <select id="t-when" name="timing" required>
+            <option value="" disabled selected>Select a timeframe</option>
+            <option>As soon as possible</option><option>Within a month</option><option>1–3 months</option><option>Just exploring</option>
+          </select></div>
+        <fieldset><legend>Your red flags: tick anything you won't live with</legend>
+          <div class="checks">
+            <label class="chk"><input type="checkbox" name="redflags" value="Landlord">Landlord in the Compound</label>
+            <label class="chk"><input type="checkbox" name="redflags" value="Shared Meter"> Shared Meter</label>
+            <label class="chk"><input type="checkbox" name="redflags" value="Outstanding Utility Bills"> Outstanding Utility Bills</label>
+            <label class="chk"><input type="checkbox" name="redflags" value="Bad road"> Bad access road</label>
+            <label class="chk"><input type="checkbox" name="redflags" value="No steady water"> No steady water</label>
+            <label class="chk"><input type="checkbox" name="redflags" value="Poor electricity"> Poor electricity</label>
+            <label class="chk"><input type="checkbox" name="redflags" value="Insecure"> Poor security</label>
+            <label class="chk"><input type="checkbox" name="redflags" value="Crowded compound"> Crowded compound</label>
+          </div></fieldset>
+        <div class="field"><label for="t-taste">Anything else about your taste? <span class="opt">(optional)</span></label><textarea id="t-taste" name="taste" placeholder="e.g. A quiet street, tiled floors, space for a small garden"></textarea></div>
+        <div class="hp"><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
+        <button class="btn" type="submit">Get early access</button>
+        <div class="err">Something went wrong. Please check your connection and try again.</div>
+        <div class="hint">No spam. We only message you when it matters.</div>
+      </form>
+      <div class="done"><div class="big">You're on the list 🎉</div><p>We'll message you on WhatsApp as soon as matches open up for you.</p></div>
+    </div>
+
+    <div class="card" id="card-agent" role="tabpanel" aria-labelledby="tab-agent" hidden>
+      <form data-type="agent" novalidate>
+        <h3>Get tenants who are serious</h3>
+        <p class="desc">We're inviting a first group of agents and landlords. Tell us a bit and we'll reach out personally.</p>
+        <div class="field"><label for="a-name">Your name</label><input id="a-name" name="name" type="text" autocomplete="name" required></div>
+        <div class="field"><label for="a-phone">WhatsApp number</label><input id="a-phone" name="phone" type="tel" inputmode="tel" placeholder="080XXXXXXXX" autocomplete="tel" required></div>
+        <div class="field"><label for="a-email">Email <span class="opt">(optional)</span></label><input id="a-email" name="email" type="email" autocomplete="email"></div>
+        <div class="field"><label for="a-role">You are a…</label>
+          <select id="a-role" name="role" required>
+            <option value="" disabled selected>Select one</option>
+            <option>Agent</option><option>Landlord / property owner</option><option>Property manager</option>
+          </select></div>
+        <div class="field"><label for="a-area">Area(s) you operate in</label><input id="a-area" name="areas" type="text" placeholder="e.g. Arab road, Chikakore, FO1" required></div>
+        <div class="field"><label for="a-count">How many houses do you currently rent in a month?</label>
+          <select id="a-count" name="listings" required>
+            <option value="" disabled selected>Select a range</option>
+            <option>1–3</option><option>4–10</option><option>11–30</option><option>More than 30</option>
+          </select></div>
+        <div class="hp"><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
+        <button class="btn" type="submit">Request an invite</button>
+        <div class="err">Something went wrong. Please check your connection and try again.</div>
+        <div class="hint">We review every request personally before launch.</div>
+      </form>
+      <div class="done"><div class="big">Request received </div><p>Someone from our team will reach out on WhatsApp before we open.</p></div>
+    </div>
+
+    <div class="ref"><b>Want to skip the queue?</b> Refer two friends who are house hunting and you'll be in our first batch. We'll send your share link once you're on the list.</div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap"><b>ConfirmBase</b> is still being built. Thank you for backing us early.</div>
+</footer>
+
+<script>
+/* SETUP: Configured to point to the ConfirmBase FastAPI waitlist endpoint. */
+var FORM_ENDPOINT = (window.location.protocol === 'file:' || !window.location.origin.startsWith('http'))
+  ? 'http://localhost:8000/api/v1/waitlist'
+  : '/api/v1/waitlist';
+
+(function(){
+  var tabs = {tenant:document.getElementById('tab-tenant'), agent:document.getElementById('tab-agent')};
+  var cards = {tenant:document.getElementById('card-tenant'), agent:document.getElementById('card-agent')};
+  function pick(k){
+    for(var key in tabs){
+      var on = key===k;
+      tabs[key].setAttribute('aria-selected', on);
+      cards[key].hidden = !on;
+    }
+  }
+  tabs.tenant.onclick=function(){pick('tenant')};
+  tabs.agent.onclick=function(){pick('agent')};
+  document.querySelectorAll('[data-pick]').forEach(function(a){
+    a.addEventListener('click',function(){pick(a.getAttribute('data-pick'))});
+  });
+
+  document.querySelectorAll('form[data-type]').forEach(function(form){
+    form.addEventListener('submit',function(e){
+      e.preventDefault();
+      var err = form.querySelector('.err'); err.classList.remove('show');
+      if(form.website.value) return;
+      if(!form.checkValidity()){ form.reportValidity(); return; }
+      var data = {type: form.getAttribute('data-type'), submitted_at: new Date().toISOString()};
+      new FormData(form).forEach(function(v,k){
+        if(k==='website') return;
+        data[k] = data[k] ? data[k]+', '+v : v;
+      });
+      var btn = form.querySelector('button[type=submit]'); btn.disabled = true;
+      function ok(){
+        form.style.display='none';
+        form.parentNode.querySelector('.done').classList.add('show');
+      }
+      if(!FORM_ENDPOINT){ console.warn('FORM_ENDPOINT not set. Submission not saved:', data); ok(); return; }
+      fetch(FORM_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(data)})
+        .then(function(r){ if(!r.ok) throw new Error('bad'); ok(); })
+        .catch(function(){ btn.disabled=false; err.classList.add('show'); });
+    });
+  });
+})();
+</script>
+</body>
+</html>

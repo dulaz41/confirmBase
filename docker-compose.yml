@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: waitlist_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-waitlist_db}
+      POSTGRES_USER: ${POSTGRES_USER:-waitlist_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-waitlist_secure_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-waitlist_user} -d ${POSTGRES_DB:-waitlist_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - waitlist_internal_net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: waitlist_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-waitlist_user}:${POSTGRES_PASSWORD:-waitlist_secure_pass}@db:5432/${POSTGRES_DB:-waitlist_db}
+      SYNC_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-waitlist_user}:${POSTGRES_PASSWORD:-waitlist_secure_pass}@db:5432/${POSTGRES_DB:-waitlist_db}
+      BACKUP_DIRECTORY: /app/backups
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - waitlist_backups:/app/backups
+    networks:
+      - waitlist_internal_net
+
+volumes:
+  postgres_data:
+    driver: local
+  waitlist_backups:
+    driver: local
+
+networks:
+  waitlist_internal_net:
+    driver: bridge
