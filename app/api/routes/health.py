@@ -13,6 +13,11 @@ router = APIRouter(tags=["Health"])
     summary="Application Health Probe",
     description="Minimal health response indicating the application process is running. Never leaks internals.",
 )
+@router.head(
+    "/health",
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
 async def health_check():
     return {"status": "ok"}
 
@@ -21,6 +26,10 @@ async def health_check():
     "/ready",
     summary="Application Readiness Probe",
     description="Verifies that critical backing services, specifically PostgreSQL, are reachable.",
+)
+@router.head(
+    "/ready",
+    include_in_schema=False,
 )
 async def readiness_check(response: Response, db: AsyncSession = Depends(get_db)):
     is_db_ready = await check_database_health(db)

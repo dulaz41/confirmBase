@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import urllib.parse
 from typing import List, Literal, Optional
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -116,19 +117,43 @@ class Settings(BaseSettings):
         description="Sender email address",
     )
     EMAIL_FROM_NAME: str = Field(
-        default="Waitlist Team",
-        description="Sender display name",
+        default="The ConfirmBase Team",
+        description="Sender display name (e.g. 'The ConfirmBase Team')",
+    )
+    FOUNDER_NAME: str = Field(
+        default="The ConfirmBase Team",
+        description="Sender or team sign-off name used in email footer",
+    )
+    WAITLIST_URL: str = Field(
+        default="https://getconfirmbase.com",
+        description="Public URL to waitlist landing page",
+    )
+    WHATSAPP_TENANT_GROUP_URL: str = Field(
+        default="https://chat.whatsapp.com/EifxSYFTE1J3oO4LsQUBdu?s=cl&p=a&mlu=4&ilr=4",
+        description="WhatsApp community link for tenants / house hunters",
+    )
+    WHATSAPP_AGENT_GROUP_URL: str = Field(
+        default="https://chat.whatsapp.com/JzyeEqqgIgMJVWsuAYMKWK?s=cl&p=a&mlu=4&ilr=4",
+        description="WhatsApp community link for agents / landlords",
     )
     EMAIL_SUBJECT: str = Field(
-        default="You're on the ConfirmBase early list! 🎉",
-        description="Subject for waitlist confirmation emails",
+        default="You’re in. Here’s what happens next",
+        description="Default fallback subject for waitlist confirmation emails",
+    )
+    PRIVACY_POLICY_URL: str = Field(
+        default="https://docs.google.com/document/d/1-9Pab8LJ2yupF5v0zMRMrjSvq9tZWC1E/preview",
+        description="Public URL to Google Doc or page hosting ConfirmBase Privacy Policy",
+    )
+    UNSUBSCRIBE_URL: Optional[str] = Field(
+        default=None,
+        description="Optional explicit override URL for unsubscription (otherwise dynamically routed)",
     )
     PRODUCT_NAME: str = Field(
         default="ConfirmBase",
         description="Product name rendered in email notifications",
     )
     COMPANY_NAME: str = Field(
-        default="ConfirmBase Team",
+        default="ConfirmBase",
         description="Company / organization name in footer",
     )
 
@@ -170,6 +195,21 @@ class Settings(BaseSettings):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         elif url.startswith("sqlite://") and not url.startswith("sqlite+aiosqlite://"):
             url = url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+
+        # asyncpg requires 'ssl' instead of 'sslmode', and does not support 'channel_binding'
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.query:
+            query_params = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+            new_params = []
+            for k, v in query_params:
+                if k == "channel_binding":
+                    continue
+                if k == "sslmode":
+                    k = "ssl"
+                new_params.append((k, v))
+            new_query = urllib.parse.urlencode(new_params)
+            url = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, new_query, parsed.fragment))
+
         return url
 
     @property
@@ -181,6 +221,16 @@ class Settings(BaseSettings):
             url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
         elif url.startswith("sqlite+aiosqlite://"):
             url = url.replace("sqlite+aiosqlite://", "sqlite://", 1)
+
+        # Standard PostgreSQL libpq drivers (psycopg) expect 'sslmode' instead of 'ssl'
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.query:
+            query_params = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+            keys = [k for k, _ in query_params]
+            if "ssl" in keys and "sslmode" not in keys:
+                new_params = [(("sslmode" if k == "ssl" else k), v) for k, v in query_params]
+                new_query = urllib.parse.urlencode(new_params)
+                url = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, new_query, parsed.fragment))
 
         # In SQLAlchemy 2.1+, postgresql:// defaults to psycopg (v3).
         # Seamlessly adapt to whichever driver is installed (psycopg v3 or psycopg2 v2):

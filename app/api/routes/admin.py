@@ -64,6 +64,50 @@ async def list_waitlist_entries(
 
 
 @router.get(
+    "/entries/tenant",
+    response_model=AdminEntriesListResponse,
+    summary="List Tenant Entries",
+    description="Returns a paginated list of tenant waitlist entries with all preference details.",
+)
+async def list_tenant_entries(
+    page: int = Query(default=1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(default=50, ge=1, le=500, description="Items per page"),
+    db: AsyncSession = Depends(get_db),
+) -> AdminEntriesListResponse:
+    total, entries = await WaitlistService.list_entries(
+        db, user_type="tenant", page=page, page_size=page_size
+    )
+    return AdminEntriesListResponse(
+        total=total,
+        page=page,
+        page_size=page_size,
+        entries=[WaitlistEntryDetail.model_validate(e) for e in entries],
+    )
+
+
+@router.get(
+    "/entries/agent",
+    response_model=AdminEntriesListResponse,
+    summary="List Agent Entries",
+    description="Returns a paginated list of agent waitlist entries with operational areas and listing volumes.",
+)
+async def list_agent_entries(
+    page: int = Query(default=1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(default=50, ge=1, le=500, description="Items per page"),
+    db: AsyncSession = Depends(get_db),
+) -> AdminEntriesListResponse:
+    total, entries = await WaitlistService.list_entries(
+        db, user_type="agent", page=page, page_size=page_size
+    )
+    return AdminEntriesListResponse(
+        total=total,
+        page=page,
+        page_size=page_size,
+        entries=[WaitlistEntryDetail.model_validate(e) for e in entries],
+    )
+
+
+@router.get(
     "/export",
     summary="Export Waitlist CSV",
     description="Streams a CSV export of waitlist entries. Use '?type=tenant' or '?type=agent' to download them separately, and '?emails_only=true' for bulk mailer tools.",

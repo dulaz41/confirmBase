@@ -103,3 +103,36 @@ async def test_internal_error_does_not_leak_internals(async_client: AsyncClient,
     assert "postgres" not in str(data)
     assert "secret_pass" not in str(data)
     assert "CRITICAL" not in str(data)
+
+
+@pytest.mark.asyncio
+async def test_head_routes_support(async_client: AsyncClient):
+    """HEAD requests on root, /health, and /ready must return 200 without 405 error."""
+    res_root = await async_client.head("/")
+    assert res_root.status_code == 200
+
+    res_health = await async_client.head("/health")
+    assert res_health.status_code == 200
+
+    res_ready = await async_client.head("/ready")
+    assert res_ready.status_code == 200
+
+
+def test_database_url_ssl_sanitization():
+    """Verify asyncpg converts sslmode to ssl and strips channel_binding, while sync converts ssl to sslmode."""
+    from app.core.config import Settings
+
+    # Neon async URL conversion: sslmode=require -> ssl=require, channel_binding removed
+    neon_url = "postgresql://u:p@ep-cool.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+    cfg = Settings(DATABASE_URL=neon_url, SYNC_DATABASE_URL=None)
+    assert "ssl=require" in cfg.async_db_url
+    assert "sslmode" not in cfg.async_db_url
+    assert "channel_binding" not in cfg.async_db_url
+    assert cfg.async_db_url.startswith("postgresql+asyncpg://")
+
+    # Sync URL conversion: ssl=require -> sslmode=require
+    ssl_url = "postgresql://u:p@ep-cool.eu-central-1.aws.neon.tech/neondb?ssl=require"
+    cfg2 = Settings(DATABASE_URL=ssl_url, SYNC_DATABASE_URL=None)
+    assert "sslmode=require" in cfg2.sync_db_url
+    assert "ssl=require" not in cfg2.sync_db_url
+

@@ -22,7 +22,7 @@ class StructuredJsonFormatter(logging.Formatter):
         }
 
         # Include custom extra fields if provided
-        for key in ("event", "status", "method", "path", "status_code", "duration_ms", "client_ip", "error_type", "count", "record_id"):
+        for key in ("event", "status", "method", "path", "status_code", "duration_ms", "client_ip", "error_type", "error_message", "count", "record_id"):
             if hasattr(record, key):
                 log_entry[key] = getattr(record, key)
 

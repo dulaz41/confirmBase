@@ -14,8 +14,10 @@ from tests.conftest import TestingSessionLocal
 
 
 @pytest.mark.asyncio
-async def test_csv_snapshot_creation(db_session: AsyncSession):
+async def test_csv_snapshot_creation(db_session: AsyncSession, monkeypatch):
     """BackupService creates a valid timestamped CSV snapshot."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "BACKUP_ENCRYPTION_KEY", None)
     # Seed entry
     entry = WaitlistEntry(
         email="snapshot@example.com",
@@ -132,3 +134,67 @@ def test_restore_sqlite_database():
         row = cur.fetchone()
         t_conn.close()
         assert row[0] == "restored@example.com"
+
+
+def test_upload_to_s3_mocked(monkeypatch):
+    """Verifies upload_to_s3 properly formats S3 client kwargs and calls upload_file."""
+    import sys
+    from unittest.mock import MagicMock
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "S3_BUCKET_NAME", "my-test-bucket")
+    monkeypatch.setattr(settings, "AWS_ACCESS_KEY_ID", "test-key-id")
+    monkeypatch.setattr(settings, "AWS_SECRET_ACCESS_KEY", "test-secret-key")
+    monkeypatch.setattr(settings, "S3_ENDPOINT_URL", "https://xyz.r2.cloudflarestorage.com")
+
+    mock_s3_client = MagicMock()
+    mock_boto3 = MagicMock()
+    mock_boto3.client.return_value = mock_s3_client
+    monkeypatch.setitem(sys.modules, "boto3", mock_boto3)
+    monkeypatch.setitem(sys.modules, "botocore", MagicMock())
+    monkeypatch.setitem(sys.modules, "botocore.config", MagicMock())
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        test_file = Path(temp_dir) / "dummy.csv"
+        test_file.write_text("test")
+
+        service = BackupService(base_dir=temp_dir)
+        s3_key = service.upload_to_s3(test_file, subfolder="csv")
+
+        assert s3_key == "csv/dummy.csv"
+        mock_s3_client.upload_file.assert_called_once_with(
+            str(test_file), "my-test-bucket", "csv/dummy.csv"
+        )
+
+
+def test_upload_to_s3_endpoint_sanitization(monkeypatch):
+    """Verifies that trailing bucket name or slash in endpoint URL is automatically stripped."""
+    import sys
+    from unittest.mock import MagicMock
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "S3_BUCKET_NAME", "confirmbase-backups")
+    monkeypatch.setattr(settings, "AWS_ACCESS_KEY_ID", "test-key-id")
+    monkeypatch.setattr(settings, "AWS_SECRET_ACCESS_KEY", "test-secret-key")
+    monkeypatch.setattr(
+        settings, "S3_ENDPOINT_URL", "https://xyz.r2.cloudflarestorage.com/confirmbase-backups/"
+    )
+
+    mock_s3_client = MagicMock()
+    mock_boto3 = MagicMock()
+    mock_boto3.client.return_value = mock_s3_client
+    monkeypatch.setitem(sys.modules, "boto3", mock_boto3)
+    monkeypatch.setitem(sys.modules, "botocore", MagicMock())
+    monkeypatch.setitem(sys.modules, "botocore.config", MagicMock())
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        test_file = Path(temp_dir) / "dummy.csv"
+        test_file.write_text("test")
+
+        service = BackupService(base_dir=temp_dir)
+        service.upload_to_s3(test_file, subfolder="csv")
+
+        _, kwargs = mock_boto3.client.call_args
+        assert kwargs["endpoint_url"] == "https://xyz.r2.cloudflarestorage.com"
+
+

@@ -18,6 +18,15 @@ async def test_root_serves_confirmbase_landing_page(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_privacy_policy_redirect(async_client: AsyncClient):
+    """GET /privacy redirects to the view-only Privacy Policy URL."""
+    response = await async_client.get("/privacy", follow_redirects=False)
+    assert response.status_code == 307
+    assert "1-9Pab8LJ2yupF5v0zMRMrjSvq9tZWC1E" in response.headers["location"]
+    assert "preview" in response.headers["location"]
+
+
+@pytest.mark.asyncio
 async def test_health_check(async_client: AsyncClient):
     """GET /health returns 200 ok without revealing system internals."""
     response = await async_client.get("/health")
@@ -362,15 +371,29 @@ async def test_swagger_docs_and_openapi_tags(async_client: AsyncClient):
 
     # Verify tags defined in OpenAPI schema
     tag_names = [t["name"] for t in schema.get("tags", [])]
+    assert "Waitlist" in tag_names
     assert "Tenant" in tag_names
     assert "Agent" in tag_names
     assert "Admin" in tag_names
+    assert "Health" in tag_names
 
     # Verify route grouping
     paths = schema["paths"]
-    assert "Tenant" in paths["/api/v1/waitlist/tenant"]["post"]["tags"]
-    assert "Agent" in paths["/api/v1/waitlist/agent"]["post"]["tags"]
-    assert "Admin" in paths["/api/v1/admin/waitlist/export"]["get"]["tags"]
+    assert "/v1/waitlist" in paths
+    assert "Waitlist" in paths["/v1/waitlist"]["post"]["tags"]
+    assert "/v1/waitlist/tenant" in paths
+    assert "Tenant" in paths["/v1/waitlist/tenant"]["post"]["tags"]
+    assert "/v1/waitlist/agent" in paths
+    assert "Agent" in paths["/v1/waitlist/agent"]["post"]["tags"]
+    assert "/v1/admin/waitlist/entries" in paths
+    assert "/v1/admin/waitlist/entries/tenant" in paths
+    assert "/v1/admin/waitlist/entries/agent" in paths
+    assert "Admin" in paths["/v1/admin/waitlist/export"]["get"]["tags"]
+
+    # Verify redundant routes are hidden from OpenAPI docs
+    assert "/api/v1/waitlist" not in paths
+    assert "/api/v1/waitlist/tenant" not in paths
+    assert "/api/v1/waitlist/agent" not in paths
 
 
 @pytest.mark.asyncio
@@ -441,3 +464,225 @@ async def test_frontend_contract_validation_error_returns_422(async_client: Asyn
     assert data["ok"] is False
     assert data["error"] == "validation"
     assert "phone" in data["errors"]
+
+
+@pytest.mark.asyncio
+async def test_v1_tenant_and_agent_dedicated_endpoints(async_client: AsyncClient, db_session: AsyncSession):
+    """POST /v1/waitlist/tenant and /v1/waitlist/agent register entries properly."""
+    tenant_payload = {
+        "name": "Fatima Musa",
+        "phone": "08011223344",
+        "email": "fatima@example.com",
+        "areas": "Arab road",
+        "budget": "Under ₦500k",
+        "timing": "Within a month",
+    }
+    t_res = await async_client.post("/v1/waitlist/tenant", json=tenant_payload)
+    assert t_res.status_code == 201
+    assert t_res.json()["success"] is True
+
+    agent_payload = {
+        "name": "Emeka Properties",
+        "phone": "08099881122",
+        "email": "emeka@props.ng",
+        "role": "Agent",
+        "areas": "FO1, Chikakore",
+        "listings": "4–10",
+    }
+    a_res = await async_client.post("/v1/waitlist/agent", json=agent_payload)
+    assert a_res.status_code == 201
+    assert a_res.json()["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_admin_entries_tenant_and_agent_shortcuts(async_client: AsyncClient, db_session: AsyncSession):
+    """GET /v1/admin/waitlist/entries/tenant and /agent return filtered entries."""
+    from app.core.config import settings
+
+    headers = {"Authorization": f"Bearer {settings.ADMIN_API_KEY}"}
+
+    t_res = await async_client.get("/v1/admin/waitlist/entries/tenant", headers=headers)
+    assert t_res.status_code == 200
+    assert "entries" in t_res.json()
+
+    a_res = await async_client.get("/v1/admin/waitlist/entries/agent", headers=headers)
+    assert a_res.status_code == 200
+    assert "entries" in a_res.json()
+
+
+@pytest.mark.asyncio
+async def test_step2_enrichment_flow_checklist(async_client: AsyncClient, db_session: AsyncSession):
+    """
+    Verification checklist from frontend handoff:
+    1. New tenant -> 201 with position
+    2. Same payload again -> 409 already_on_list
+    3. New agent -> 201
+    4. redflags as comma-separated string -> also 201
+    5. Honeypot filled -> must NOT persist
+    6. Step-2 enrichment: POST the phone from check 1 with only a preference field
+       -> returns 200 {ok: true, updated: true, position: N}
+       -> taste is updated in DB
+       -> budget/timing/redflags are NOT blanked by omission
+    7. Same step-2 payload again -> returns 409 already_on_list (nothing needed writing)
+    """
+    # 1. New tenant -> 201 with a position
+    p1 = {
+        "type": "tenant",
+        "name": "Frontend Test",
+        "phone": "08012345678",
+        "email": "test@getconfirmbase.ng",
+        "areas": "Arab road, Kubwa",
+        "budget": "₦1,000,000 – ₦2,000,000",
+        "timing": "Within a month",
+        "redflags": ["Bad access road", "No steady water"],
+        "taste": "Tiled floors",
+        "submitted_at": "2026-10-13T06:39:31.635Z",
+    }
+    res1 = await async_client.post("/v1/waitlist", json=p1)
+    assert res1.status_code == 201
+    d1 = res1.json()
+    assert d1["ok"] is True
+    assert isinstance(d1["position"], int)
+    pos1 = d1["position"]
+
+    # 2. Same payload again -> 409 already_on_list
+    res2 = await async_client.post("/v1/waitlist", json=p1)
+    assert res2.status_code == 409
+    d2 = res2.json()
+    assert d2["ok"] is False
+    assert d2["error"] == "already_on_list"
+
+    # 3. New agent -> 201
+    p3 = {
+        "type": "agent",
+        "name": "Bello Properties",
+        "phone": "08098765432",
+        "email": "bello@agency.ng",
+        "role": "Agent",
+        "areas": "Kubwa, Arab road",
+        "listings": "4–10",
+    }
+    res3 = await async_client.post("/v1/waitlist", json=p3)
+    assert res3.status_code == 201
+    assert res3.json()["ok"] is True
+
+    # 4. redflags as a comma-separated string -> also 201
+    p4 = {
+        "type": "tenant",
+        "name": "String Flags User",
+        "phone": "08077665544",
+        "email": "flags@example.com",
+        "areas": "Kubwa",
+        "redflags": "Bad access road, No steady water",
+    }
+    res4 = await async_client.post("/v1/waitlist", json=p4)
+    assert res4.status_code == 201
+    assert res4.json()["ok"] is True
+
+    # 5. Honeypot filled -> must NOT persist
+    p5 = {
+        "type": "tenant",
+        "name": "Bot",
+        "phone": "08000000000",
+        "areas": "X",
+        "website": "http://spam",
+    }
+    res5 = await async_client.post("/v1/waitlist", json=p5)
+    assert res5.status_code == 201
+    stmt_bot = select(WaitlistEntry).where(WaitlistEntry.name == "Bot")
+    assert (await db_session.execute(stmt_bot)).scalar_one_or_none() is None
+
+    # 6. Step-2 enrichment: POST phone from check 1 with only taste field
+    p6 = {
+        "type": "tenant",
+        "name": "Frontend Test",
+        "phone": "08012345678",
+        "taste": "Quiet street",
+    }
+    res6 = await async_client.post("/v1/waitlist", json=p6)
+    assert res6.status_code == 200
+    d6 = res6.json()
+    assert d6["ok"] is True
+    assert d6["updated"] is True
+    assert d6["position"] == pos1
+
+    # Verify DB: taste was updated, but budget, timing, redflags were NOT blanked!
+    stmt_entry = select(WaitlistEntry).where(WaitlistEntry.phone_normalized == "+2348012345678")
+    entry = (await db_session.execute(stmt_entry)).scalar_one_or_none()
+    assert entry is not None
+    assert entry.taste == "Quiet street"
+    assert entry.budget == "₦1,000,000 – ₦2,000,000"
+    assert entry.timing == "Within a month"
+    assert "Bad access road" in entry.redflags
+    assert entry.email == "test@getconfirmbase.ng"
+
+    # 7. Resubmitting check 6 again -> nothing changed -> 409 already_on_list
+    res7 = await async_client.post("/v1/waitlist", json=p6)
+    assert res7.status_code == 409
+    assert res7.json()["ok"] is False
+    assert res7.json()["error"] == "already_on_list"
+
+
+@pytest.mark.asyncio
+async def test_step2_adding_email_to_phone_only_signup(async_client: AsyncClient, db_session: AsyncSession):
+    """Step 1 collects phone only, Step 2 adds email and preferences."""
+    # Step 1: phone only
+    res1 = await async_client.post(
+        "/v1/waitlist",
+        json={"type": "tenant", "name": "Phone Only User", "phone": "08044445555", "areas": "Kubwa"},
+    )
+    assert res1.status_code == 201
+
+    # Step 2: enrich with email and budget
+    res2 = await async_client.post(
+        "/v1/waitlist",
+        json={
+            "type": "tenant",
+            "phone": "08044445555",
+            "email": "added_later@example.com",
+            "budget": "₦500k–₦1m",
+        },
+    )
+    assert res2.status_code == 200
+    d2 = res2.json()
+    assert d2["ok"] is True
+    assert d2["updated"] is True
+
+    stmt = select(WaitlistEntry).where(WaitlistEntry.phone_normalized == "+2348044445555")
+    entry = (await db_session.execute(stmt)).scalar_one_or_none()
+    assert entry is not None
+    assert entry.email == "added_later@example.com"
+    assert entry.email_normalized == "added_later@example.com"
+    assert entry.budget == "₦500k–₦1m"
+    assert entry.name == "Phone Only User"
+    assert entry.areas == "Kubwa"
+
+
+@pytest.mark.asyncio
+async def test_step2_agent_enrichment(async_client: AsyncClient, db_session: AsyncSession):
+    """Agent signs up with basic details in step 1 and provides role/listings in step 2."""
+    res1 = await async_client.post(
+        "/v1/waitlist",
+        json={"type": "agent", "name": "Agent Demo", "phone": "08066667777", "areas": "Arab road"},
+    )
+    assert res1.status_code == 201
+
+    res2 = await async_client.post(
+        "/v1/waitlist",
+        json={
+            "type": "agent",
+            "phone": "08066667777",
+            "role": "Property manager",
+            "listings": "11–30",
+        },
+    )
+    assert res2.status_code == 200
+    assert res2.json()["ok"] is True
+    assert res2.json()["updated"] is True
+
+    stmt = select(WaitlistEntry).where(WaitlistEntry.phone_normalized == "+2348066667777")
+    entry = (await db_session.execute(stmt)).scalar_one_or_none()
+    assert entry is not None
+    assert entry.role == "Property manager"
+    assert entry.listings == "11–30"
+

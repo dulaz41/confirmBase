@@ -63,5 +63,5 @@ async def check_database_health(session: AsyncSession | None = None) -> bool:
             result = await s.execute(text("SELECT 1"))
             return result.scalar() == 1
     except Exception as exc:
-        logger.warning(f"Database health check failed: {type(exc).__name__}")
+        logger.error(f"Database health check failed: {type(exc).__name__}: {exc}", exc_info=True)
         return False

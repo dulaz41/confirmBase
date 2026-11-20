@@ -276,14 +276,19 @@ footer b{color:var(--navy)}
 </section>
 
 <footer>
-  <div class="wrap"><b>ConfirmBase</b> is still being built. Thank you for backing us early.</div>
+  <div class="wrap">
+    <b>ConfirmBase</b> is still being built. Thank you for backing us early.
+    <div style="margin-top: 8px;">
+      <a href="https://docs.google.com/document/d/1-9Pab8LJ2yupF5v0zMRMrjSvq9tZWC1E/preview" target="_blank" rel="noopener noreferrer" style="color: var(--muted); text-decoration: underline;">Privacy Policy</a>
+    </div>
+  </div>
 </footer>
 
 <script>
 /* SETUP: Configured to point to the ConfirmBase FastAPI waitlist endpoint. */
 var FORM_ENDPOINT = (window.location.protocol === 'file:' || !window.location.origin.startsWith('http'))
-  ? 'http://localhost:8000/api/v1/waitlist'
-  : '/api/v1/waitlist';
+  ? 'http://localhost:8000/v1/waitlist'
+  : '/v1/waitlist';
 
 (function(){
   var tabs = {tenant:document.getElementById('tab-tenant'), agent:document.getElementById('tab-agent')};

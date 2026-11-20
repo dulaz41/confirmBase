@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_db
 from app.api.routes import admin, health, waitlist
 from app.core.config import settings
 from app.core.logging import setup_logging
@@ -77,20 +79,20 @@ def create_app() -> FastAPI:
     """FastAPI application factory."""
     tags_metadata = [
         {
+            "name": "Waitlist",
+            "description": "ConfirmBase unified waitlist contract endpoint (POST /v1/waitlist) for dynamic submissions.",
+        },
+        {
             "name": "Tenant",
-            "description": "Tenant waitlist registrations. Captures tenant preferences, budget, move-in timeframe, and deal-breaker red flags.",
+            "description": "Dedicated tenant waitlist registrations (POST /v1/waitlist/tenant).",
         },
         {
             "name": "Agent",
-            "description": "Agent and landlord registrations. Captures role, operating areas, and monthly listing volumes.",
+            "description": "Dedicated agent and landlord registrations (POST /v1/waitlist/agent).",
         },
         {
             "name": "Admin",
-            "description": "Administrative management endpoints. Export CSVs (full data or emails-only for bulk campaigns), view statistics, and manage entries. Requires Bearer API Key authentication.",
-        },
-        {
-            "name": "Waitlist (Unified)",
-            "description": "Unified registration endpoint accepting dynamic tenant or agent submissions from frontend forms.",
+            "description": "Administrative management endpoints. View entries, export CSVs, and view statistics. Requires Bearer API Key authentication.",
         },
         {
             "name": "Health",
@@ -177,9 +179,10 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         logger.error(
-            "Unhandled internal server error",
+            f"Unhandled internal server error: {type(exc).__name__}: {exc}",
             extra={
                 "error_type": type(exc).__name__,
+                "error_message": str(exc),
                 "path": request.url.path,
                 "method": request.method,
             },
@@ -195,18 +198,35 @@ def create_app() -> FastAPI:
 
     # Register Routers
     app.include_router(health.router)
-    app.include_router(waitlist.router)
     app.include_router(waitlist.v1_router)
-    app.include_router(admin.router, prefix="/api/v1/admin/waitlist")
+    app.include_router(waitlist.router, include_in_schema=False)
     app.include_router(admin.router, prefix="/v1/admin/waitlist")
+    app.include_router(admin.router, prefix="/api/v1/admin/waitlist", include_in_schema=False)
 
     # Serve ConfirmBase landing page
-    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse, include_in_schema=False)
     async def serve_index():
         index_file = Path(__file__).resolve().parent.parent / "index.html"
         if index_file.exists():
             return HTMLResponse(content=index_file.read_text(encoding="utf-8"))
         return HTMLResponse(content="<h1>ConfirmBase API</h1>")
+
+    # Redirect /privacy to view-only Privacy Policy document
+    @app.get("/privacy", include_in_schema=False)
+    async def privacy_redirect():
+        return RedirectResponse(
+            url=settings.PRIVACY_POLICY_URL,
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        )
+
+    # Direct 1-Click Unsubscribe page and action
+    @app.get("/unsubscribe", response_class=HTMLResponse, include_in_schema=False)
+    async def direct_unsubscribe(
+        email: Optional[str] = Query(default="", description="Email address to unsubscribe"),
+        format: Optional[str] = Query(default=None),
+        db: AsyncSession = Depends(get_db),
+    ):
+        return await waitlist.unsubscribe_waitlist(email=email or "", format=format, db=db)
 
     return app
 

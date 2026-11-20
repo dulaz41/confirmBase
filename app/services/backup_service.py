@@ -90,6 +90,8 @@ class BackupService:
             env = os.environ.copy()
             if parsed.password:
                 env["PGPASSWORD"] = parsed.password
+            if "sslmode=require" in (parsed.query or ""):
+                env["PGSSLMODE"] = "require"
 
             cmd = [
                 "pg_dump",
@@ -192,16 +194,57 @@ class BackupService:
 
         return deleted_files
 
+    def upload_to_s3(self, file_path: Path, subfolder: str = "backups") -> str:
+        """
+        Uploads a local backup file to AWS S3 or Cloudflare R2 bucket.
+        Returns the object key within the bucket.
+        """
+        if not settings.S3_BUCKET_NAME:
+            raise ValueError("S3_BUCKET_NAME must be configured when BACKUP_STORAGE is 's3'")
+
+        try:
+            import boto3
+            from botocore.config import Config
+        except ImportError:
+            raise RuntimeError(
+                "boto3 is required for S3/R2 backup uploads. Please ensure boto3 is installed."
+            )
+
+        client_kwargs: dict[str, Any] = {
+            "aws_access_key_id": settings.AWS_ACCESS_KEY_ID,
+            "aws_secret_access_key": settings.AWS_SECRET_ACCESS_KEY,
+            "region_name": settings.AWS_REGION or "us-east-1",
+            "config": Config(signature_version="s3v4"),
+        }
+        if settings.S3_ENDPOINT_URL:
+            endpoint = settings.S3_ENDPOINT_URL.strip().rstrip("/")
+            if settings.S3_BUCKET_NAME and endpoint.endswith(f"/{settings.S3_BUCKET_NAME}"):
+                endpoint = endpoint[:-len(f"/{settings.S3_BUCKET_NAME}")].rstrip("/")
+            client_kwargs["endpoint_url"] = endpoint
+
+        s3_client = boto3.client("s3", **client_kwargs)
+        s3_key = f"{subfolder}/{file_path.name}"
+
+        logger.info(
+            f"Uploading {file_path.name} to s3://{settings.S3_BUCKET_NAME}/{s3_key}..."
+        )
+        s3_client.upload_file(str(file_path), settings.S3_BUCKET_NAME, s3_key)
+        logger.info(f"Successfully uploaded {file_path.name} to S3/R2 ({s3_key})")
+        return s3_key
+
     async def run_full_backup(self) -> Tuple[Optional[Path], Optional[Path]]:
         """
         Executes full 24-hour backup cycle:
         1. CSV snapshot
         2. Database dump
         3. Retention policy enforcement
-        4. Structured audit logging
+        4. Optional offsite S3 / Cloudflare R2 upload
+        5. Structured audit logging
         """
         csv_file: Optional[Path] = None
         db_file: Optional[Path] = None
+        s3_csv_key: Optional[str] = None
+        s3_db_key: Optional[str] = None
 
         try:
             # 1. CSV snapshot
@@ -214,13 +257,29 @@ class BackupService:
             self.enforce_retention(self.csv_dir, settings.BACKUP_RETENTION_DAYS)
             self.enforce_retention(self.postgres_dir, settings.BACKUP_RETENTION_DAYS)
 
+            # 4. Offsite S3/R2 upload if enabled
+            if settings.BACKUP_STORAGE == "s3" and settings.S3_BUCKET_NAME:
+                try:
+                    if csv_file:
+                        s3_csv_key = await asyncio.to_thread(self.upload_to_s3, csv_file, "csv")
+                    if db_file:
+                        s3_db_key = await asyncio.to_thread(self.upload_to_s3, db_file, "postgres")
+                except Exception as s3_exc:
+                    logger.error(f"Failed to upload backup to S3/R2: {s3_exc}", exc_info=True)
+                    audit_logger.error(
+                        "Offsite backup upload failed",
+                        extra={"event": "s3_upload_failed", "error": str(s3_exc)},
+                    )
+
             audit_logger.info(
                 "Automated backup completed successfully",
                 extra={
                     "event": "backup_created",
                     "status": "success",
-                    "csv_file": csv_file.name,
-                    "db_file": db_file.name,
+                    "csv_file": csv_file.name if csv_file else None,
+                    "db_file": db_file.name if db_file else None,
+                    "s3_csv_key": s3_csv_key,
+                    "s3_db_key": s3_db_key,
                 },
             )
             return csv_file, db_file

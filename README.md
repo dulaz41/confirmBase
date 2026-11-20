@@ -594,4 +594,3 @@ EMAIL_PROVIDER=resend
 3. [ ] **Database Access:** Restrict PostgreSQL port 5432 to internal private network access only.
 4. [ ] **Backups:** Mount `/app/backups` to a persistent volume or configure off-site S3 synchronization.
 5. [ ] **Run Migrations:** Execute `alembic upgrade head` during deployment startup.
-"# confirmBase" 

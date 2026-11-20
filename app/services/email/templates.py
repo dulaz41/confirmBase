@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional
+from app.core.config import settings
 
 
 def render_confirmation_text(
@@ -12,63 +13,93 @@ def render_confirmation_text(
     phone: Optional[str] = None,
     areas: Optional[str] = None,
     role: Optional[str] = None,
+    founder_name: Optional[str] = None,
+    share_link: Optional[str] = None,
+    whatsapp_group_url: Optional[str] = None,
+    privacy_url: Optional[str] = None,
+    unsubscribe_url: Optional[str] = None,
 ) -> str:
     """Renders plain-text fallback version of the waitlist confirmation email."""
-    greeting = f"Hi {name.strip()}" if name and name.strip() else "Hello"
+    first_name = name.strip().split()[0] if name and name.strip() else ""
+    salutation = f"Hi {first_name}," if first_name else "Hi,"
+    sign_off_name = founder_name or getattr(settings, "FOUNDER_NAME", "The ConfirmBase Team")
+    if "team" in sign_off_name.lower():
+        sign_off_block = sign_off_name
+    else:
+        sign_off_block = f"{sign_off_name}\nFounder, {product_name}"
+    share = share_link or getattr(
+        settings, "WAITLIST_URL", "https://getconfirmbase.com"
+    )
+    privacy = privacy_url or getattr(
+        settings,
+        "PRIVACY_POLICY_URL",
+        "https://docs.google.com/document/d/1-9Pab8LJ2yupF5v0zMRMrjSvq9tZWC1E/preview",
+    )
+    base_url = getattr(settings, "WAITLIST_URL", "https://getconfirmbase.com").rstrip(
+        "/"
+    )
+    unsub = (
+        unsubscribe_url
+        or getattr(settings, "UNSUBSCRIBE_URL", None)
+        or f"{base_url}/v1/waitlist/unsubscribe?email={recipient_email}"
+    )
 
     if user_type == "agent":
-        role_label = role or "Agent / Landlord"
-        return f"""{greeting},
+        group_url = whatsapp_group_url or getattr(
+            settings,
+            "WHATSAPP_AGENT_GROUP_URL",
+            "https://chat.whatsapp.com/JzyeEqqgIgMJVWsuAYMKWK?s=cl&p=a&mlu=4&ilr=4",
+        )
+        return f"""{salutation}
 
-Thank you for requesting an invite to partner with {product_name}!
+Thanks for your interest in listing on {product_name}. Your request is in, and we review every one personally. Here’s what happens next.
 
-We have received your request for listings in: {areas or 'your operating areas'}.
+What happens next
 
-Your Submitted Profile:
-- Role: {role_label}
-- Operating Area(s): {areas or 'Not specified'}
-- WhatsApp Number: {phone or 'Not specified'}
-- Registered Email: {recipient_email}
+We’ll be in touch: we’ll let you know once we’ve reviewed your request, and before we open in Kubwa.
+Serious tenants: your houses are matched with tenants whose taste they suit.
+Direct deals: you deal directly with tenants and keep your full commission.
 
-What happens next?
-1. Personal Review: We review every agent, landlord, and property manager before launch to ensure a verified network.
-2. Serious tenants only: Every tenant sent to inspect your properties has paid an inspection fee, eliminating time-wasters and no-shows.
-3. Keep full commission: Deal directly with the tenant and keep your full commission without middlemen.
-4. WhatsApp Onboarding: Someone from our team will reach out directly on WhatsApp ({phone or 'your number'}) before we launch.
+While you wait
 
-Thank you for your early support!
+Join the Kubwa agents WhatsApp group: {group_url}
 
-Best regards,
-The {product_name} Team
+Know another agent in Kubwa who should hear about this? Send them this link: {share}
+
+Thanks again,
+{sign_off_block}
 
 ---
-You received this email because you requested an agent/landlord invite at {company_name}.
-If you did not request this, you can safely ignore this email.
+{product_name}, Kubwa, Abuja · Reply to this email anytime · Privacy: {privacy} · Unsubscribe: {unsub}
 """
 
     # Tenant template
-    return f"""{greeting},
+    group_url = whatsapp_group_url or getattr(
+        settings,
+        "WHATSAPP_TENANT_GROUP_URL",
+        "https://chat.whatsapp.com/EifxSYFTE1J3oO4LsQUBdu?s=cl&p=a&mlu=4&ilr=4",
+    )
+    return f"""{salutation}
 
-Congratulations! You're officially on the waitlist for {product_name}.
+Thanks for backing {product_name} early. You’re on the list for Kubwa, and here’s what happens next.
 
-We have saved your home search preferences:
-- Target Area(s): {areas or 'Not specified'}
-- WhatsApp Number: {phone or 'Not specified'}
-- Registered Email: {recipient_email}
+What happens next
 
-What happens next?
-1. Red flags filtered out: We inspect and verify properties beforehand so you never waste days on places with flooding, bad access roads, or misleading photos.
-2. Personalised matches: Instead of endless scrolling, you'll receive a short, curated list matching your taste and budget.
-3. WhatsApp notification: We'll message you directly on WhatsApp ({phone or 'your number'}) as soon as verified houses open in your area!
+Personalised matches: instead of endless scrolling, you’ll see a short list of homes that fit your taste and budget.
+Fewer wasted trips: your red flags are left out, so you spend less time inspecting places that were never right for you.
+We’ll let you know: you’ll hear from us before we open, so you’re among the first to see your matches.
 
-Thank you for your early support!
+While you wait
 
-Best regards,
-The {product_name} Team
+Join the Kubwa tenants WhatsApp group: {group_url}
+
+Know someone else house hunting in Kubwa? Send them this link: {share}
+
+Talk soon,
+{sign_off_block}
 
 ---
-You received this email because you signed up for the waitlist at {company_name}.
-If you did not request this, you can safely ignore this email.
+{product_name}, Kubwa, Abuja · Reply to this email anytime · Privacy: {privacy} · Unsubscribe: {unsub}
 """
 
 
@@ -81,49 +112,88 @@ def render_confirmation_html(
     phone: Optional[str] = None,
     areas: Optional[str] = None,
     role: Optional[str] = None,
+    founder_name: Optional[str] = None,
+    share_link: Optional[str] = None,
+    whatsapp_group_url: Optional[str] = None,
+    privacy_url: Optional[str] = None,
+    unsubscribe_url: Optional[str] = None,
 ) -> str:
     """Renders responsive HTML version of the waitlist confirmation email."""
-    greeting = f"Hi {name.strip()}" if name and name.strip() else "Hi there"
+    first_name = name.strip().split()[0] if name and name.strip() else ""
+    salutation = f"Hi {first_name}," if first_name else "Hi,"
+    sign_off_name = founder_name or getattr(settings, "FOUNDER_NAME", "The ConfirmBase Team")
+    if "team" in sign_off_name.lower():
+        sign_off_html = f'<p style="margin: 4px 0 0 0; font-weight: 700; color: #00140e;">{sign_off_name}</p>'
+    else:
+        sign_off_html = f'''<p style="margin: 4px 0 0 0; font-weight: 700; color: #00140e;">{sign_off_name}</p>
+            <p style="margin: 2px 0 0 0; color: #666666; font-size: 14px;">Founder, {product_name}</p>'''
+    share = share_link or getattr(
+        settings, "WAITLIST_URL", "https://getconfirmbase.com"
+    )
+    privacy = privacy_url or getattr(
+        settings,
+        "PRIVACY_POLICY_URL",
+        "https://docs.google.com/document/d/1-9Pab8LJ2yupF5v0zMRMrjSvq9tZWC1E/preview",
+    )
+    base_url = getattr(settings, "WAITLIST_URL", "https://getconfirmbase.com").rstrip(
+        "/"
+    )
+    unsub = (
+        unsubscribe_url
+        or getattr(settings, "UNSUBSCRIBE_URL", None)
+        or f"{base_url}/v1/waitlist/unsubscribe?email={recipient_email}"
+    )
 
     if user_type == "agent":
-        role_label = role or "Agent / Landlord"
-        badge_text = "Agent Partnership Request"
-        header_title = "Agent Request Received! 🏢"
-        intro_text = f"Thank you for your interest in partnering with <strong>{product_name}</strong>! We have received your request for listings in <strong>{areas or 'your operating areas'}</strong>."
-        details_html = f"""
-          <div class="highlight-card">
-            <p>Role: <strong>{role_label}</strong></p>
-            <p style="margin-top: 6px;">Operating Area(s): <strong>{areas or 'Not specified'}</strong></p>
-            <p style="margin-top: 6px;">WhatsApp: <strong>{phone or 'Not specified'}</strong></p>
-            <p style="margin-top: 6px;">Email: <strong>{recipient_email}</strong></p>
-          </div>
-        """
-        steps_html = f"""
+        header_title = "Request received"
+        preheader_text = "We review every request personally and will be in touch."
+        group_url = whatsapp_group_url or getattr(
+            settings,
+            "WHATSAPP_AGENT_GROUP_URL",
+            "https://chat.whatsapp.com/JzyeEqqgIgMJVWsuAYMKWK?s=cl&p=a&mlu=4&ilr=4",
+        )
+        intro_text = (
+            f"Thanks for your interest in listing on <strong>{product_name}</strong>. "
+            "Your request is in, and we review every one personally. Here’s what happens next."
+        )
+        steps_html = """
           <ul class="steps-list">
-            <li><strong>Personal Verification:</strong> We review every agent, landlord, and property manager before launch to ensure a verified network.</li>
-            <li><strong>Serious Tenants Only:</strong> Every tenant sent to inspect your properties has paid an inspection fee, eliminating time-wasters and no-shows.</li>
-            <li><strong>Keep Full Commission:</strong> Deal directly with the tenant and keep your full commission without middlemen.</li>
-            <li><strong>WhatsApp Onboarding:</strong> Someone from our partnership team will reach out directly on WhatsApp (<strong>{phone or 'your number'}</strong>) before we open.</li>
+            <li><strong>We’ll be in touch:</strong> we’ll let you know once we’ve reviewed your request, and before we open in Kubwa.</li>
+            <li><strong>Serious tenants:</strong> your houses are matched with tenants whose taste they suit.</li>
+            <li><strong>Direct deals:</strong> you deal directly with tenants and keep your full commission.</li>
           </ul>
         """
+        whatsapp_button_text = "Join the Kubwa agents WhatsApp group &rarr;"
+        share_text = f'Know another agent in Kubwa who should hear about this? Send them this link: <a href="{share}" class="link-share" style="color: #00614d; font-weight: 600; text-decoration: underline;">{share}</a>'
+        sign_off_phrase = "Thanks again,"
     else:
-        badge_text = "Spot Confirmed"
-        header_title = "You're on the waitlist! 🎉"
-        intro_text = f"Thank you for your interest in <strong>{product_name}</strong>! You have officially joined our waitlist and your spot is confirmed."
-        details_html = f"""
-          <div class="highlight-card">
-            <p>Target Area(s): <strong>{areas or 'Not specified'}</strong></p>
-            <p style="margin-top: 6px;">WhatsApp: <strong>{phone or 'Not specified'}</strong></p>
-            <p style="margin-top: 6px;">Registered Email: <strong>{recipient_email}</strong></p>
-          </div>
-        """
-        steps_html = f"""
+        header_title = "You’re on the list"
+        preheader_text = "We’ll let you know before we open in Kubwa."
+        group_url = whatsapp_group_url or getattr(
+            settings,
+            "WHATSAPP_TENANT_GROUP_URL",
+            "https://chat.whatsapp.com/EifxSYFTE1J3oO4LsQUBdu?s=cl&p=a&mlu=4&ilr=4",
+        )
+        intro_text = (
+            f"Thanks for backing <strong>{product_name}</strong> early. "
+            "You’re on the list for Kubwa, and here’s what happens next."
+        )
+        steps_html = """
           <ul class="steps-list">
-            <li><strong>Fewer Inspections, Better Houses:</strong> We inspect and filter properties beforehand so you never waste days on places with flooding, bad roads, or misleading photos.</li>
-            <li><strong>Personalised Matches:</strong> Instead of endless scrolling, you'll receive a short, curated list matching your taste and budget.</li>
-            <li><strong>WhatsApp Notification:</strong> We'll message you on WhatsApp (<strong>{phone or 'your number'}</strong>) as soon as verified houses open in your area.</li>
+            <li><strong>Personalised matches:</strong> instead of endless scrolling, you’ll see a short list of homes that fit your taste and budget.</li>
+            <li><strong>Fewer wasted trips:</strong> your red flags are left out, so you spend less time inspecting places that were never right for you.</li>
+            <li><strong>We’ll let you know:</strong> you’ll hear from us before we open, so you’re among the first to see your matches.</li>
           </ul>
         """
+        whatsapp_button_text = "Join the Kubwa tenants WhatsApp group &rarr;"
+        share_text = f'Know someone else house hunting in Kubwa? Send them this link: <a href="{share}" class="link-share" style="color: #00614d; font-weight: 600; text-decoration: underline;">{share}</a>'
+        sign_off_phrase = "Talk soon,"
+
+    brand_logo_html = (
+        '<div class="logo" style="font-size: 21px; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 12px; color: #ffffff;">confirm<span class="logo-base" style="color: #d8b36a;">Base</span></div>'
+        if "confirmbase" in product_name.lower()
+        else f'<div class="logo" style="font-size: 21px; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 12px; color: #ffffff;">{product_name}</div>'
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -135,71 +205,65 @@ def render_confirmation_html(
     body {{
       margin: 0;
       padding: 0;
-      background-color: #f8fafc;
+      background-color: #f5f4f3;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      color: #14213a;
+      color: #262626;
       -webkit-font-smoothing: antialiased;
     }}
     .wrapper {{
       width: 100%;
       table-layout: fixed;
-      background-color: #f8fafc;
+      background-color: #f5f4f3;
       padding: 40px 16px;
     }}
     .container {{
       max-width: 580px;
       margin: 0 auto;
       background-color: #ffffff;
-      border-radius: 14px;
-      border: 1px solid #dde3ec;
+      border-radius: 16px;
+      border: 1px solid #e5e5e5;
       overflow: hidden;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      box-shadow: 0 4px 20px rgba(0, 20, 14, 0.08);
     }}
     .header {{
-      background: #0f2342;
-      padding: 34px 28px;
+      background: #00140e;
+      border-bottom: 3px solid #ffc760;
+      padding: 34px 28px 30px 28px;
       text-align: center;
       color: #ffffff;
+    }}
+    .logo {{
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+      color: #ffffff;
+    }}
+    .logo-base {{
+      color: #d8b36a;
     }}
     .header h1 {{
       margin: 0;
       font-size: 24px;
       font-weight: 700;
       letter-spacing: -0.02em;
-    }}
-    .badge {{
-      display: inline-block;
-      margin-top: 10px;
-      padding: 5px 14px;
-      background-color: #ddf5ea;
-      color: #066a47;
-      border-radius: 9999px;
-      font-size: 13px;
-      font-weight: 700;
+      color: #ffffff;
     }}
     .content {{
-      padding: 30px 28px 24px 28px;
+      padding: 32px 28px 24px 28px;
       line-height: 1.6;
       font-size: 15px;
-      color: #334155;
+      color: #363636;
     }}
-    .highlight-card {{
-      background-color: #f6f8fb;
-      border-left: 4px solid #0e9f6e;
-      padding: 16px 20px;
-      border-radius: 8px;
-      margin: 22px 0;
-      font-size: 14.5px;
-    }}
-    .highlight-card p {{
-      margin: 0;
-      color: #55627a;
-    }}
-    .highlight-card strong {{
-      color: #0f2342;
+    .section-title {{
+      margin-top: 26px;
+      margin-bottom: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #00140e;
     }}
     .steps-list {{
-      margin: 18px 0;
+      margin: 12px 0 20px 0;
       padding-left: 20px;
     }}
     .steps-list li {{
@@ -207,50 +271,90 @@ def render_confirmation_html(
       line-height: 1.5;
     }}
     .steps-list strong {{
-      color: #0f2342;
+      color: #00140e;
+    }}
+    .btn-whatsapp,
+    .btn-whatsapp:link,
+    .btn-whatsapp:visited,
+    .btn-whatsapp:hover,
+    .btn-whatsapp:active {{
+      display: inline-block;
+      background-color: #00614d;
+      color: #ffffff !important;
+      text-decoration: none !important;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 13px 22px;
+      border-radius: 10px;
+      text-align: center;
+    }}
+    .btn-whatsapp span {{
+      color: #ffffff !important;
+      text-decoration: none !important;
+    }}
+    .link-share {{
+      color: #00614d;
+      font-weight: 600;
+      text-decoration: underline;
     }}
     .footer {{
       padding: 22px 28px;
-      background-color: #f8fafc;
-      border-top: 1px solid #dde3ec;
+      background-color: #f5f4f3;
+      border-top: 1px solid #e5e5e5;
       text-align: center;
       font-size: 12px;
-      color: #8896ab;
+      color: #737373;
       line-height: 1.5;
     }}
   </style>
 </head>
 <body>
+  <!-- Hidden preheader text for email client snippet preview -->
+  <div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
+    {preheader_text}
+  </div>
+
   <div class="wrapper">
-    <table class="container" role="presentation" cellpadding="0" cellspacing="0" width="100%">
+    <table class="container" role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e5e5e5; overflow: hidden; box-shadow: 0 4px 20px rgba(0, 20, 14, 0.08);">
       <tr>
-        <td class="header">
-          <h1>{header_title}</h1>
-          <div class="badge">{badge_text}</div>
+        <td class="header" style="background-color: #00140e; border-bottom: 3px solid #ffc760; padding: 34px 28px 30px 28px; text-align: center; color: #ffffff;">
+          {brand_logo_html}
+          <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; color: #ffffff;">{header_title}</h1>
         </td>
       </tr>
       <tr>
-        <td class="content">
-          <p>{greeting},</p>
-          <p>{intro_text}</p>
-          
-          {details_html}
+        <td class="content" style="padding: 32px 28px 24px 28px; line-height: 1.6; font-size: 15px; color: #363636;">
+          <p>{salutation}</p>
+          <p style="margin-top: 14px;">{intro_text}</p>
 
-          <h3 style="margin-top: 24px; font-size: 16px; color: #0f2342;">What happens next?</h3>
+          <h3 class="section-title">What happens next</h3>
           {steps_html}
 
-          <p style="margin-top: 24px;">
-            Thank you for backing us early!
+          <h3 class="section-title">While you wait</h3>
+          <div style="margin: 16px 0 20px 0;">
+            <a href="{group_url}" target="_blank" class="btn-whatsapp" style="display: inline-block; background-color: #00614d; color: #ffffff !important; text-decoration: none !important; font-size: 15px; font-weight: 700; padding: 13px 22px; border-radius: 10px; text-align: center; -webkit-text-size-adjust: none;">
+              <span style="color: #ffffff !important; text-decoration: none !important; font-weight: 700;">{whatsapp_button_text}</span>
+            </a>
+          </div>
+
+          <p style="margin-top: 16px; font-size: 14.5px; color: #555555; line-height: 1.5;">
+            {share_text}
           </p>
-          <p style="margin-bottom: 0;">
-            — The <strong>{product_name}</strong> Team
-          </p>
+
+          <div style="margin-top: 28px; line-height: 1.5;">
+            <p style="margin: 0;">{sign_off_phrase}</p>
+            {sign_off_html}
+          </div>
         </td>
       </tr>
       <tr>
-        <td class="footer">
-          <p style="margin: 0 0 6px 0;">© {company_name}. All rights reserved.</p>
-          <p style="margin: 0;">You received this email because you registered on ConfirmBase.</p>
+        <td class="footer" style="padding: 22px 28px; background-color: #f5f4f3; border-top: 1px solid #e5e5e5; text-align: center; font-size: 12px; color: #737373; line-height: 1.5;">
+          <p style="margin: 0 0 6px 0;">
+            {product_name}, Kubwa, Abuja &middot; Reply to this email anytime
+          </p>
+          <p style="margin: 0; font-size: 11.5px; color: #737373;">
+            <a href="{privacy}" target="_blank" style="color: #737373; text-decoration: underline;">Privacy</a> &middot; <a href="{unsub}" target="_blank" style="color: #737373; text-decoration: underline;">Unsubscribe</a>
+          </p>
         </td>
       </tr>
     </table>

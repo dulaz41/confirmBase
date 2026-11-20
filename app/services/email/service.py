@@ -50,6 +50,11 @@ class EmailService:
         areas: Optional[str] = None,
         role: Optional[str] = None,
         subject: Optional[str] = None,
+        founder_name: Optional[str] = None,
+        share_link: Optional[str] = None,
+        whatsapp_group_url: Optional[str] = None,
+        privacy_url: Optional[str] = None,
+        unsubscribe_url: Optional[str] = None,
     ) -> bool:
         """
         Sends waitlist confirmation email to recipient.
@@ -60,11 +65,26 @@ class EmailService:
             return False
 
         try:
+            first_name = name.strip().split()[0] if name and name.strip() else ""
+            founder = founder_name or settings.FOUNDER_NAME
+            share_url = share_link or settings.WAITLIST_URL
+            wa_group = whatsapp_group_url or (
+                settings.WHATSAPP_AGENT_GROUP_URL
+                if user_type == "agent"
+                else settings.WHATSAPP_TENANT_GROUP_URL
+            )
+
             if subject is None:
                 if user_type == "agent":
-                    subject = f"{settings.PRODUCT_NAME} Partner Invite Request Received 🏢"
+                    if first_name:
+                        subject = f"Request received, {first_name}. Here’s what happens next"
+                    else:
+                        subject = "Request received. Here’s what happens next"
                 else:
-                    subject = settings.EMAIL_SUBJECT or f"You're on the {settings.PRODUCT_NAME} early list! 🏠"
+                    if first_name:
+                        subject = f"You’re in, {first_name}. Here’s what happens next"
+                    else:
+                        subject = "You’re in. Here’s what happens next"
 
             text_content = render_confirmation_text(
                 recipient_email=to_email,
@@ -75,6 +95,11 @@ class EmailService:
                 phone=phone,
                 areas=areas,
                 role=role,
+                founder_name=founder,
+                share_link=share_url,
+                whatsapp_group_url=wa_group,
+                privacy_url=privacy_url,
+                unsubscribe_url=unsubscribe_url,
             )
             html_content = render_confirmation_html(
                 recipient_email=to_email,
@@ -85,6 +110,11 @@ class EmailService:
                 phone=phone,
                 areas=areas,
                 role=role,
+                founder_name=founder,
+                share_link=share_url,
+                whatsapp_group_url=wa_group,
+                privacy_url=privacy_url,
+                unsubscribe_url=unsubscribe_url,
             )
 
             success = await self.provider.send_email(

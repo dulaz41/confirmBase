@@ -122,8 +122,11 @@ class TenantWaitlistCreate(BaseModel):
         if isinstance(v, list):
             cleaned = [str(item).strip() for item in v if str(item).strip()]
             return ", ".join(cleaned) if cleaned else None
-        if isinstance(v, str) and not v.strip():
-            return None
+        if isinstance(v, str):
+            if not v.strip():
+                return None
+            items = [item.strip() for item in v.split(",") if item.strip()]
+            return ", ".join(items) if items else None
         return v
 
     @field_validator(
@@ -412,8 +415,11 @@ class WaitlistCreate(BaseModel):
         if isinstance(v, list):
             cleaned = [str(item).strip() for item in v if str(item).strip()]
             return ", ".join(cleaned) if cleaned else None
-        if isinstance(v, str) and not v.strip():
-            return None
+        if isinstance(v, str):
+            if not v.strip():
+                return None
+            items = [item.strip() for item in v.split(",") if item.strip()]
+            return ", ".join(items) if items else None
         return v
 
     @field_validator(
@@ -478,6 +484,7 @@ class WaitlistResponse(BaseModel):
     message: str
     ok: Optional[bool] = None
     position: Optional[int] = None
+    updated: Optional[bool] = None
 
 
 class WaitlistContractResponse(BaseModel):
@@ -485,6 +492,7 @@ class WaitlistContractResponse(BaseModel):
     ok: bool
     position: Optional[int] = None
     error: Optional[str] = None
+    updated: Optional[bool] = None
 
 
 class WaitlistEntryOut(BaseModel):

@@ -3,7 +3,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import AsyncClient, Response
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models import WaitlistEntry
 from app.core.config import settings
 from app.services.email.base import BaseEmailProvider
 from app.services.email.console import ConsoleEmailProvider
@@ -18,25 +21,31 @@ from app.services.email.templates import (
 
 
 def test_email_template_rendering():
-    """Verify HTML and plain-text email templates render with correct variables for tenants."""
+    """Verify HTML and plain-text email templates render with correct variables for tenants and include Privacy and Unsubscribe."""
     recipient = "subscriber@example.com"
     product = "SuperApp"
     company = "SuperApp Inc."
 
     text = render_confirmation_text(recipient, product, company)
-    assert recipient in text
     assert product in text
-    assert "waitlist" in text.lower()
+    assert "list for Kubwa" in text
+    assert "Join the Kubwa tenants WhatsApp group" in text
+    assert "Privacy" in text
+    assert "Unsubscribe" in text
+    assert "/v1/waitlist/unsubscribe?email=subscriber@example.com" in text
 
     html = render_confirmation_html(recipient, product, company)
-    assert recipient in html
     assert product in html
-    assert "You're on the waitlist!" in html
+    assert "You’re on the list" in html or "You're on the list" in html
+    assert "Join the Kubwa tenants WhatsApp group" in html
     assert "<!DOCTYPE html>" in html
+    assert "Privacy" in html
+    assert "Unsubscribe" in html
+    assert "/v1/waitlist/unsubscribe?email=subscriber@example.com" in html
 
 
 def test_agent_email_template_rendering():
-    """Verify HTML and plain-text email templates render specifically for agents/landlords."""
+    """Verify HTML and plain-text email templates render specifically for agents/landlords without leaking personal phone number."""
     recipient = "agent@example.com"
     product = "ConfirmBase"
     company = "ConfirmBase Ltd."
@@ -52,11 +61,15 @@ def test_agent_email_template_rendering():
         role="Licensed Agent",
     )
     assert "Hi Tunde" in text
-    assert "partner with ConfirmBase" in text
-    assert "Licensed Agent" in text
-    assert "+2348011112222" in text
-    assert "Lekki Phase 1, Ikoyi" in text
-    assert "Keep full commission" in text
+    assert "listing on ConfirmBase" in text
+    assert "keep your full commission" in text.lower()
+    assert "Join the Kubwa agents WhatsApp group" in text
+    assert "+2348011112222" not in text
+    assert "Privacy" in text
+    assert "Unsubscribe" in text
+    assert "The ConfirmBase Team" in text
+    assert "Axce" not in text
+    assert "Founder" not in text
 
     html = render_confirmation_html(
         recipient,
@@ -69,10 +82,15 @@ def test_agent_email_template_rendering():
         role="Licensed Agent",
     )
     assert "Hi Tunde" in html
-    assert "Agent Request Received!" in html
-    assert "Licensed Agent" in html
-    assert "Lekki Phase 1, Ikoyi" in html
-    assert "Serious Tenants Only" in html
+    assert "Request received" in html
+    assert "Serious tenants" in html
+    assert "Join the Kubwa agents WhatsApp group" in html
+    assert "+2348011112222" not in html
+    assert "Privacy" in html
+    assert "Unsubscribe" in html
+    assert "The ConfirmBase Team" in html
+    assert "Axce" not in html
+    assert "Founder" not in html
 
 
 
@@ -282,8 +300,8 @@ async def test_send_confirmation_email_subject_differentiation():
     )
     mock_provider.send_email.assert_called_once()
     tenant_call = mock_provider.send_email.call_args[1]
-    assert "waitlist" in tenant_call["subject"].lower() or "early list" in tenant_call["subject"].lower()
-    assert "Target Area(s)" in tenant_call["text_content"]
+    assert "You’re in, Tenant. Here’s what happens next" in tenant_call["subject"]
+    assert "list for kubwa" in tenant_call["text_content"].lower()
 
     # Agent email
     mock_provider.send_email.reset_mock()
@@ -295,6 +313,53 @@ async def test_send_confirmation_email_subject_differentiation():
     )
     mock_provider.send_email.assert_called_once()
     agent_call = mock_provider.send_email.call_args[1]
-    assert "Partner Invite Request Received" in agent_call["subject"]
-    assert "Role: Property Manager" in agent_call["text_content"]
+    assert "Request received, Agent. Here’s what happens next" in agent_call["subject"]
+    assert "listing on ConfirmBase" in agent_call["text_content"]
+
+
+@pytest.mark.asyncio
+async def test_waitlist_unsubscribe_endpoint(async_client: AsyncClient, db_session: AsyncSession):
+    """Verify GET /api/v1/waitlist/unsubscribe marks record as unsubscribed and returns confirmation."""
+    # 1. Join waitlist
+    join_res = await async_client.post(
+        "/api/v1/waitlist",
+        json={"email": "optout_user@example.com", "name": "Optout Tester"},
+    )
+    assert join_res.status_code == 201
+
+    # 2. Call unsubscribe endpoint with HTML response
+    unsub_res = await async_client.get(
+        "/api/v1/waitlist/unsubscribe?email=optout_user@example.com"
+    )
+    assert unsub_res.status_code == 200
+    assert "text/html" in unsub_res.headers["content-type"]
+    assert "unsubscribed" in unsub_res.text.lower()
+    assert "optout_user@example.com" in unsub_res.text
+
+    # 3. Call v1 alias endpoint with JSON response format
+    unsub_json_res = await async_client.get(
+        "/v1/waitlist/unsubscribe?email=optout_user@example.com&format=json"
+    )
+    assert unsub_json_res.status_code == 200
+    data = unsub_json_res.json()
+    assert data["success"] is True
+
+    # 4. Verify direct /unsubscribe route
+    direct_res = await async_client.get("/unsubscribe?email=optout_user@example.com")
+    assert direct_res.status_code == 200
+    assert "text/html" in direct_res.headers["content-type"]
+    assert "unsubscribed" in direct_res.text.lower()
+
+    # 5. Verify direct /unsubscribe without email parameter returns 200 without error
+    no_email_res = await async_client.get("/unsubscribe")
+    assert no_email_res.status_code == 200
+    assert "unsubscribed" in no_email_res.text.lower()
+
+    # 6. Verify DB state: unsubscribed_at is populated and marketing_consent is False
+    stmt = select(WaitlistEntry).where(WaitlistEntry.email_normalized == "optout_user@example.com")
+    res = await db_session.execute(stmt)
+    entry = res.scalar_one()
+    assert entry.unsubscribed_at is not None
+    assert entry.marketing_consent is False
+
 

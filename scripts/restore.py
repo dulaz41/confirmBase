@@ -38,7 +38,7 @@ def restore_backup(backup_path: Path, target_db_url: str, encryption_key: str | 
         return False
 
     temp_decompressed: Path | None = None
-    service = BackupService()
+    service = BackupService(base_dir=str(backup_path.parent))
 
     try:
         # 1. Handle decryption if needed
